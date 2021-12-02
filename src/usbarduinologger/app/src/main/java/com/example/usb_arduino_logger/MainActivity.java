@@ -1,112 +1,214 @@
 package com.example.usb_arduino_logger;
 
-import android.os.Message;
-import android.os.ParcelFileDescriptor;
-import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
-import android.hardware.usb.UsbAccessory;
+import android.app.Activity;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
-import android.widget.Adapter;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.View;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ListView;
+import android.widget.TextView;
 
-import java.io.FileDescriptor;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import com.felhr.usbserial.UsbSerialDevice;
+import com.felhr.usbserial.UsbSerialInterface;
+
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 
-public class MainActivity extends AppCompatActivity implements Runnable
+public class MainActivity extends Activity
 {
-    private UsbManager mUsbManager;
-    UsbAccessory mAccessory;
-    FileInputStream mInputStream;
-    FileOutputStream mOutputStream;
+    public final int DEFAULT_VENDOR_ID = 0x1A86;
+    public final String ACTION_USB_PERMISSION = "USB_PERMISSION";
 
     private ArrayAdapter<String> listAdapter = null;
-    private ListView listView = null;
+    private Button connectButton = null;
+    private TextView clockDisplay = null;
+    private EditText vendorIDEdit = null;
+
+    boolean _isConnected = false;
+
+    UsbManager usbManager;
+    UsbDevice device;
+    UsbSerialDevice serialPort;
+    UsbDeviceConnection connection;
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.main_activity);
 
-        listView = findViewById(R.id.listView);
-        listAdapter = new ArrayAdapter<String>(this,  android.R.layout.simple_list_item_1);
-        listView.setAdapter(listAdapter);
-        listAdapter.add("Готовы к принятию сообщений");
+        listAdapter = new ArrayAdapter<>(this,  android.R.layout.simple_list_item_1);
+        ListView logsListView = findViewById(R.id.logsList);
+        logsListView.setAdapter(listAdapter);
+        connectButton = findViewById(R.id.connectButton);
+        clockDisplay = findViewById(R.id.clockDisplay);
+        vendorIDEdit = findViewById(R.id.vendorIDEdit);
+
+        usbManager = (UsbManager) getSystemService(USB_SERVICE);
+
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(ACTION_USB_PERMISSION);
+        filter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
+        filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
+        registerReceiver(broadcastReceiver, filter);
     }
 
-    private void openAccessory(UsbAccessory accessory)
+    public int getVendorID()
     {
-        ParcelFileDescriptor mFileDescriptor = mUsbManager.openAccessory(accessory);
+        String userInput = vendorIDEdit.getText().toString();
 
-        if (mFileDescriptor != null)
+        if (userInput.isEmpty())
         {
-            mAccessory = accessory;
-            FileDescriptor fd = mFileDescriptor.getFileDescriptor();
-
-            mInputStream = new FileInputStream(fd);
-            //mOutputStream = new FileOutputStream(fd);
-
-            Thread thread = new Thread(null, this, "AccessoryThread");
-            thread.start();
+            return DEFAULT_VENDOR_ID;
+        }
+        else
+        {
+            return Integer.decode(userInput);
         }
     }
 
-    public void run()
+    public void onClickConnect(View view)
     {
-        int ret = 0;
-        byte[] buffer = new byte[16384];
-        int i;
-
-        while (ret >= 0) {
-            // получение входящих сообщений
-            try
+        try
+        {
+            if (!_isConnected)
             {
-                ret = mInputStream.read(buffer);
+                int neededID = getVendorID();
 
-                // DEBUG
-                if (ret >= 3)
+                listAdapter.add("Ищем " + neededID);
+
+                HashMap<String, UsbDevice> usbDevices = usbManager.getDeviceList();
+                if (!usbDevices.isEmpty())
                 {
-                    int command = buffer[0];
-                    int target = buffer[1];
-                    byte value = buffer[2];
+                    boolean keep = true;
+                    for (Map.Entry<String, UsbDevice> entry : usbDevices.entrySet())
+                    {
+                        device = entry.getValue();
+                        int deviceVID = device.getVendorId();
 
-                    listAdapter.add(
-                            "Команда " + command + "\n" +
-                            "Модуль " + target + "\n" +
-                            "Значение " + value + "\n");
+                        if (deviceVID == neededID)
+                        {
+                            listAdapter.add("Устройство найдено");
+
+                            final Intent piIntent = new Intent(ACTION_USB_PERMISSION);
+                            piIntent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
+                            PendingIntent pi = PendingIntent.getBroadcast(this, 0, piIntent, 0);
+                            usbManager.requestPermission(device, pi);
+                            keep = false;
+                        }
+                        else
+                        {
+                            connection = null;
+                            device = null;
+                        }
+
+                        if (!keep)
+                            break;
+                    }
                 }
-
-            } catch (IOException e) {
-                listAdapter.add(e.toString());
+            }
+            else
+            {
+                serialPort.close();
+                _isConnected = false;
+                connectButton.setText("Подключиться");
+                clockDisplay.setText("");
             }
         }
+        catch (Exception exception)
+        {
+            listAdapter.add(exception.getMessage());
+        }
     }
 
-    // пример использования - включить красный светодиод на полную яркость:
-    // mActivity.sendCommand((byte)2, (byte)0, (byte)255)
-//    public void sendCommand(byte command, byte target, int value)
-//    {
-//        byte[] buffer = new byte[3];
-//        if (value > 255)
-//            value = 255;
-//
-//        buffer[0] = command;
-//        buffer[1] = target;
-//        buffer[2] = (byte) value;
-//        if (mOutputStream != null && buffer[1] != -1)
-//        {
-//            try
-//            {
-//                mOutputStream.write(buffer);
-//            }
-//            catch (IOException e)
-//            {
-//
-//            }
-//        }
-//    }
+    public void onClickClear(View view)
+    {
+        listAdapter.clear();
+    }
+
+    UsbSerialInterface.UsbReadCallback usbReadCallback = new UsbSerialInterface.UsbReadCallback()
+    {
+        @Override
+        public void onReceivedData(byte[] arg0)
+        {
+            try
+            {
+                String data = new String(arg0, StandardCharsets.UTF_8);
+                clockDisplay.setText(data);
+            }
+            catch (Exception exception)
+            {
+                listAdapter.add(exception.getMessage());
+            }
+        }
+    };
+
+    private final BroadcastReceiver broadcastReceiver = new BroadcastReceiver()
+    {
+        @Override
+        public void onReceive(Context context, Intent intent)
+        {
+            try
+            {
+                if (intent.getAction().equals(ACTION_USB_PERMISSION))
+                {
+                    boolean granted = intent.getExtras().getBoolean(UsbManager.EXTRA_PERMISSION_GRANTED);
+                    if (granted)
+                    {
+                        listAdapter.add("Разрешение на использование устройства получено");
+                        connection = usbManager.openDevice(device);
+                        serialPort = UsbSerialDevice.createUsbSerialDevice(device, connection);
+
+                        if (serialPort != null)
+                        {
+                            if (serialPort.open())
+                            {
+                                serialPort.setBaudRate(9600);
+                                serialPort.setDataBits(UsbSerialInterface.DATA_BITS_8);
+                                serialPort.setStopBits(UsbSerialInterface.STOP_BITS_1);
+                                serialPort.setParity(UsbSerialInterface.PARITY_NONE);
+                                serialPort.setFlowControl(UsbSerialInterface.FLOW_CONTROL_OFF);
+                                serialPort.read(usbReadCallback);
+
+                                listAdapter.add("Serial Connection Opened!");
+
+                                _isConnected = true;
+                                connectButton.setText("Отключиться");
+                            }
+                            else
+                            {
+                                Log.d("SERIAL", "PORT NOT OPEN");
+                                listAdapter.add("PORT NOT OPEN");
+                            }
+                        }
+                        else
+                        {
+                            Log.d("SERIAL", "PORT IS NULL");
+                            listAdapter.add("PORT IS NULL");
+                        }
+                    }
+                    else
+                    {
+                        Log.d("SERIAL", "PERM NOT GRANTED");
+                        listAdapter.add("Отказано в доступе");
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                listAdapter.add(exception.getMessage());
+            }
+        }
+    };
 }

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/textView"
+        android:layout_width="412dp"
+        android:layout_height="41dp"
+        android:text="Введите ID устройства"
+        android:textAlignment="center" />
+
+    <EditText
+        android:id="@+id/vendorIDEdit"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ems="10"
+        android:inputType="textPersonName"
+        android:minHeight="48dp"
+        android:text="@string/default_vendor_id"
+        android:textAlignment="center" />
+
+    <Button
+        android:id="@+id/connectButton"
+        android:layout_width="match_parent"
+        android:layout_height="59dp"
+        android:onClick="onClickConnect"
+        android:text="Подключиться" />
+
+    <TextView
+        android:id="@+id/clockDisplay"
+        android:layout_width="412dp"
+        android:layout_height="203dp"
+        android:textAlignment="center" />
+
+    <ListView
+        android:id="@+id/logsList"
+        android:layout_width="match_parent"
+        android:layout_height="324dp" />
+
+    <Button
+        android:id="@+id/clearLogsButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:onClick="onClickClear"
+        android:text="Очистить логи" />
+</LinearLayout>

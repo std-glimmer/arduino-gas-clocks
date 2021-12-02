@@ -1,0 +1,3 @@
+<resources>
+    <usb-accessory model="DemoKit" manufacturer="Google" version="1.0"/>
+</resources>

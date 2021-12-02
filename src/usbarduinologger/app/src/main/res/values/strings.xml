@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">usb-arduino-logger</string>
+    <string name="default_vendor_id">0x1A86</string>
 </resources>
