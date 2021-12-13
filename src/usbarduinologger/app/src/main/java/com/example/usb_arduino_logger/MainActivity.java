@@ -144,8 +144,12 @@ public class MainActivity extends Activity
         {
             try
             {
-                String data = new String(arg0, StandardCharsets.UTF_8);
-                clockDisplay.setText(data);
+                if (arg0.length == 3) {
+                    int hours = arg0[0];
+                    int mins = arg0[1];
+                    int secs = arg0[2];
+                    clockDisplay.setText(String.format("%02d:%02d:%02d", hours, mins, secs));
+                }
             }
             catch (Exception exception)
             {
